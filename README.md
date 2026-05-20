@@ -1,36 +1,212 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Job Board Frontend
 
-## Getting Started
+Next.js frontend for a Job Board application backed by a Laravel 13 REST API. The app uses Laravel Sanctum SPA authentication with cookie-based sessions, not JWT tokens.
 
-First, run the development server:
+## Tech Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js App Router with TypeScript
+- React 19
+- Tailwind CSS
+- Axios with interceptors
+- Zustand for auth state
+- React Hook Form and Zod for forms
+- Docker Compose for local full-stack development
+
+> Note: this repository currently uses `next@16.2.6`. Next's bundled docs mark `middleware.ts` as deprecated in favor of `proxy.ts`, so route protection is implemented in `src/proxy.ts`.
+
+## Backend
+
+The frontend expects the Laravel API project at:
+
+```text
+C:\dashboard-api
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Default API URL:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```text
+http://localhost:8000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Required Laravel endpoints:
 
-## Learn More
+- `GET /sanctum/csrf-cookie`
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/auth/me`
 
-To learn more about Next.js, take a look at the following resources:
+## Auth Flow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Login follows the Sanctum SPA sequence:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+1. `GET /sanctum/csrf-cookie`
+2. `POST /api/v1/auth/login`
+3. `GET /api/v1/auth/me`
+4. Save the authenticated user in Zustand
+5. Protected routes call Laravel `/api/v1/auth/me` from `src/proxy.ts`
 
-## Deploy on Vercel
+Axios is configured in `src/lib/axios.ts` with:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- `baseURL` from `NEXT_PUBLIC_API_URL`
+- `withCredentials: true`
+- XSRF cookie forwarding from `XSRF-TOKEN`
+- `401` auth clear and redirect to `/login`
+- `422` validation error extraction
+- `500+` generic error toast
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Environment
+
+Create a local env file from the example:
+
+```powershell
+copy .env.example .env.local
+```
+
+Current example values:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_INTERNAL_API_URL=http://localhost:8000
+NEXT_TELEMETRY_DISABLED=1
+```
+
+For Docker, `.env.docker` is already included:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_INTERNAL_API_URL=http://laravel-api:8000
+NEXT_TELEMETRY_DISABLED=1
+WATCHPACK_POLLING=true
+CHOKIDAR_USEPOLLING=true
+```
+
+`NEXT_PUBLIC_API_URL` is used by the browser. `NEXT_INTERNAL_API_URL` is used by server-side route protection inside Docker.
+
+## Local Development
+
+Install dependencies:
+
+```powershell
+npm install
+```
+
+Run the frontend:
+
+```powershell
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+The root route redirects to `/login`.
+
+## Docker Development
+
+The included `docker-compose.yml` runs:
+
+- `laravel-api`: PHP 8.3-FPM + Nginx on port `8000`
+- `nextjs-app`: Node 20 on port `3000`
+- `mysql`: MySQL 8.0 with persistent volume
+- `redis`: Redis 7 for cache and queues
+- `mailpit`: email testing, UI on port `8025`
+
+Run the full stack:
+
+```powershell
+docker compose up --build
+```
+
+Useful URLs:
+
+- Frontend: `http://localhost:3000`
+- Laravel API: `http://localhost:8000`
+- Mailpit: `http://localhost:8025`
+
+Both Laravel and Next.js source folders are bind-mounted for hot reload in development.
+
+## Project Structure
+
+```text
+src/
+  app/
+    (auth)/
+      login/page.tsx
+      register/page.tsx
+    (dashboard)/
+      dashboard/page.tsx
+      employer/jobs/page.tsx
+      jobseeker/browse/page.tsx
+    layout.tsx
+    page.tsx
+  components/
+    ClientEventBridge.tsx
+  hooks/
+    useAuth.ts
+  lib/
+    auth.ts
+    axios.ts
+    client-events.ts
+  store/
+    authStore.ts
+  types/
+    api.types.ts
+  proxy.ts
+```
+
+## Important Files
+
+- `src/lib/axios.ts`: shared Axios instance and API error handling
+- `src/lib/auth.ts`: Sanctum auth API helpers
+- `src/store/authStore.ts`: Zustand auth state
+- `src/hooks/useAuth.ts`: public auth hook for UI components
+- `src/proxy.ts`: protected route guard
+- `src/types/api.types.ts`: shared API interfaces
+- `docker-compose.yml`: full local stack
+
+## API Types
+
+Shared TypeScript response models live in `src/types/api.types.ts`:
+
+- `ApiResponse<T>`
+- `User`
+- `Job`
+- `Application`
+- `ValidationErrors`
+
+Expected API wrapper:
+
+```ts
+{
+  success: boolean;
+  data: T;
+  message: string;
+  errors: Record<string, string[]> | null;
+}
+```
+
+## Scripts
+
+```powershell
+npm run dev
+npm run build
+npm run start
+npm run lint
+```
+
+## Verification
+
+Before pushing changes:
+
+```powershell
+npm run lint
+npm run build
+docker compose config --quiet
+```
+
+## AI Disclosure
+
+This project was scaffolded and iterated with AI assistance. The generated code was reviewed through linting and production build checks.
