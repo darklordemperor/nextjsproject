@@ -8,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { useAuth } from "@/hooks/useAuth";
 import { getErrorMessage, getValidationErrors } from "@/lib/axios";
+import type { UserRole } from "@/types/api.types";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Enter a valid email address."),
@@ -15,6 +16,12 @@ const loginSchema = z.object({
 });
 
 type LoginFormValues = z.infer<typeof loginSchema>;
+
+const roleRedirects: Record<UserRole, string> = {
+  admin: "/admin/dashboard",
+  employer: "/employer/jobs",
+  jobseeker: "/jobseeker/browse",
+};
 
 export default function LoginPage() {
   const router = useRouter();
@@ -39,11 +46,11 @@ export default function LoginPage() {
 
     try {
       const user = await login(values.email, values.password);
-      const nextUrl = new URLSearchParams(window.location.search).get("next");
 
-      router.replace(
-        nextUrl ?? (user.role === "employer" ? "/employer/jobs" : "/jobseeker/browse"),
-      );
+      const nextUrl = new URLSearchParams(window.location.search).get("next");
+      const redirectTo = nextUrl ?? roleRedirects[user.role];
+
+      router.replace(redirectTo);
       router.refresh();
     } catch (error) {
       const validationErrors = getValidationErrors(error);

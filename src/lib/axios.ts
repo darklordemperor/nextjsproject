@@ -1,48 +1,18 @@
 "use client";
 
-import axios, { AxiosError, type InternalAxiosRequestConfig } from "axios";
+import axios, { AxiosError } from "axios";
 import { emitAuthUnauthorized, emitToast } from "@/lib/client-events";
 import type { LaravelValidationError, ValidationErrors } from "@/types/api.types";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-
-function getCookie(name: string) {
-  if (typeof document === "undefined") {
-    return null;
-  }
-
-  const cookie = document.cookie
-    .split("; ")
-    .find((row) => row.startsWith(`${name}=`));
-
-  if (!cookie) {
-    return null;
-  }
-
-  return decodeURIComponent(cookie.split("=")[1] ?? "");
-}
-
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: "/",
   withCredentials: true,
   withXSRFToken: true,
-  xsrfCookieName: "XSRF-TOKEN",
-  xsrfHeaderName: "X-XSRF-TOKEN",
   headers: {
-    Accept: "application/json",
     "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-Requested-With": "XMLHttpRequest",
   },
-});
-
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
-  const xsrfToken = getCookie("XSRF-TOKEN");
-
-  if (xsrfToken) {
-    config.headers.set("X-XSRF-TOKEN", xsrfToken);
-    config.headers.set("X-CSRF-TOKEN", xsrfToken);
-  }
-
-  return config;
 });
 
 api.interceptors.response.use(
